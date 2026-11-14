@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>軌道シミュレーター試作</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 6px 10px;
+      background-color: #1e1e1e;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+    .btn {
+      background-color: #2c2c2e;
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn:active {
+      opacity: 0.7;
+    }
+    .btn.primary {
+      background-color: #0a84ff;
+      border-color: #0a84ff;
+    }
+    .btn.active-mode {
+      background-color: #ff9f0a;
+      border-color: #ff9f0a;
+      color: #000;
+    }
+    .btn.mini {
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    .settings-panel {
+      display: none;
+      background-color: #1c1c1e;
+      border-bottom: 1px solid #333;
+      padding: 8px 10px;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .settings-panel.open {
+      display: block;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      gap: 6px;
+    }
+    .slider-row label {
+      width: 68px;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      min-width: 60px;
+    }
+    .slider-row span {
+      width: 46px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .legend-note {
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .canvas-container {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      background-color: #000;
+      padding: 4px;
+    }
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      touch-action: none;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+    }
+    .placeholder-text {
+      position: absolute;
+      color: #888;
+      font-size: 14px;
+      text-align: center;
+      pointer-events: none;
+      line-height: 1.6;
+    }
+    .bottom-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 6px 10px;
+      background-color: #1e1e1e;
+      border-top: 1px solid #333;
+      flex-shrink: 0;
+    }
+    .angle-display {
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      min-width: 68px;
+      text-align: center;
+      color: #ffd60a;
+      font-weight: bold;
+    }
+    .fine-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 上部バー -->
+  <div class="top-bar">
+    <label class="btn primary">
+      画像選択
+      <input type="file" id="imageInput" accept="image/*" />
+    </label>
+    <div style="display: flex; gap: 4px;">
+      <button id="modePlaceBtn" class="btn active-mode">1.手番配置</button>
+      <button id="modeAimBtn" class="btn">2.引っ張る</button>
+    </div>
+    <button id="toggleSettingsBtn" class="btn">枠調整</button>
+  </div>
+
+  <!-- 枠・半径調整パネル -->
+  <div id="settingsPanel" class="settings-panel">
+    <div class="legend-note">
+      <span style="color:#ff453a;">■ 赤線</span>：壁のフチ ／ <span style="color:#32d74b;">■ 緑点線</span>：実際に反射（折り返し）する位置
+    </div>
+    <div class="slider-row">
+      <label>上壁の位置</label>
+      <button class="btn mini step-btn" data-target="wallTop" data-delta="-0.2">-</button>
+      <input type="range" id="wallTop" min="-10" max="48" step="0.1" value="14.5" />
+      <button class="btn mini step-btn" data-target="wallTop" data-delta="0.2">+</button>
+      <span id="wallTopVal">14.5%</span>
+    </div>
+    <div class="slider-row">
+      <label>下壁の位置</label>
+      <button class="btn mini step-btn" data-target="wallBottom" data-delta="-0.2">-</button>
+      <input type="range" id="wallBottom" min="52" max="110" step="0.1" value="79.5" />
+      <button class="btn mini step-btn" data-target="wallBottom" data-delta="0.2">+</button>
+      <span id="wallBottomVal">79.5%</span>
+    </div>
+    <div class="slider-row">
+      <label>左壁の位置</label>
+      <button class="btn mini step-btn" data-target="wallLeft" data-delta="-0.2">-</button>
+      <input type="range" id="wallLeft" min="-10" max="48" step="0.1" value="1.5" />
+      <button class="btn mini step-btn" data-target="wallLeft" data-delta="0.2">+</button>
+      <span id="wallLeftVal">1.5%</span>
+    </div>
+    <div class="slider-row">
+      <label>右壁の位置</label>
+      <button class="btn mini step-btn" data-target="wallRight" data-delta="-0.2">-</button>
+      <input type="range" id="wallRight" min="52" max="110" step="0.1" value="98.5" />
+      <button class="btn mini step-btn" data-target="wallRight" data-delta="0.2">+</button>
+      <span id="wallRightVal">98.5%</span>
+    </div>
+    <div class="slider-row">
+      <label>ボール半径</label>
+      <button class="btn mini step-btn" data-target="ballRadius" data-delta="-0.1">-</button>
+      <input type="range" id="ballRadius" min="0" max="8" step="0.1" value="1.8" />
+      <button class="btn mini step-btn" data-target="ballRadius" data-delta="0.1">+</button>
+      <span id="ballRadiusVal">1.8%</span>
+    </div>
+    <div class="slider-row" style="margin-bottom: 0; margin-top: 6px;">
+      <button id="dragInvertBtn" class="btn mini" style="flex: 1;">引っ張り式（逆方向に発射）</button>
+      <button id="resetConfigBtn" class="btn mini">初期値に戻す</button>
+    </div>
+  </div>
+
+  <!-- メイン描画エリア -->
+  <div class="canvas-container">
+    <div id="placeholder" class="placeholder-text">
+      左上の「画像選択」から<br />スクリーンショットを読み込んでください
+    </div>
+    <canvas id="simCanvas"></canvas>
+  </div>
+
+  <!-- 下部微調整バー -->
+  <div class="bottom-bar">
+    <div class="fine-controls">
+      <button id="angleMinusLarge" class="btn">-2°</button>
+      <button id="angleMinus" class="btn">-0.5°</button>
+      <div id="angleText" class="angle-display">-90.0°</div>
+      <button id="anglePlus" class="btn">+0.5°</button>
+      <button id="anglePlusLarge" class="btn">+2°</button>
+    </div>
+    <button id="bounceBtn" class="btn">反射: 6回</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const imageInput = document.getElementById('imageInput');
+    const placeholder = document.getElementById('placeholder');
+
+    let bgImage = null;
+    let mode = 'place';
+    let ballPos = { x: 0.5, y: 0.5 };
+    let angleDeg = -90;
+    let maxBounces = 6;
+    let invertDrag = true;
+
+    let isDragging = false;
+    let dragStart = null;
+    let dragCurrent = null;
+
+    // モンストの壁判定に近づけた初期値
+    const defaultConfig = {
+      wallTop: 14.5,
+      wallBottom: 79.5,
+      wallLeft: 1.5,
+      wallRight: 98.5,
+      ballRadius: 1.8
+    };
+
+    const config = { ...defaultConfig };
+
+    // 新しい保存キーを使用して古い設定の上書きを防ぐ
+    const STORAGE_KEY = 'sim_wall_config_v2';
+    const savedConfig = localStorage.getItem(STORAGE_KEY);
+    if (savedConfig) {
+      Object.assign(config, JSON.parse(savedConfig));
+    }
+
+    const sliderKeys = ['wallTop', 'wallBottom', 'wallLeft', 'wallRight', 'ballRadius'];
+
+    function applySliderValue(key, rawValue) {
+      const el = document.getElementById(key);
+      const valEl = document.getElementById(key + 'Val');
+      const min = parseFloat(el.min);
+      const max = parseFloat(el.max);
+      const clamped = Math.max(min, Math.min(max, Math.round(rawValue * 10) / 10));
+
+      config[key] = clamped;
+      el.value = clamped;
+      valEl.textContent = clamped.toFixed(1) + '%';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      clampBallPosition();
+      draw();
+    }
+
+    sliderKeys.forEach(key => {
+      const el = document.getElementById(key);
+      const valEl = document.getElementById(key + 'Val');
+      el.value = config[key];
+      valEl.textContent = config[key].toFixed(1) + '%';
+
+      el.addEventListener('input', () => {
+        applySliderValue(key, parseFloat(el.value));
+      });
+    });
+
+    document.querySelectorAll('.step-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.target;
+        const delta = parseFloat(btn.dataset.delta);
+        applySliderValue(key, config[key] + delta);
+      });
+    });
+
+    document.getElementById('resetConfigBtn').addEventListener('click', () => {
+      sliderKeys.forEach(key => applySliderValue(key, defaultConfig[key]));
+    });
+
+    canvas.width = 750;
+    canvas.height = 1334;
+
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          canvas.width = img.width;
+          canvas.height = img.height;
+          placeholder.style.display = 'none';
+          setMode('place');
+          clampBallPosition();
+          draw();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    const modePlaceBtn = document.getElementById('modePlaceBtn');
+    const modeAimBtn = document.getElementById('modeAimBtn');
+
+    function setMode(newMode) {
+      mode = newMode;
+      modePlaceBtn.classList.toggle('active-mode', mode === 'place');
+      modeAimBtn.classList.toggle('active-mode', mode === 'aim');
+      draw();
+    }
+
+    modePlaceBtn.addEventListener('click', () => setMode('place'));
+    modeAimBtn.addEventListener('click', () => setMode('aim'));
+
+    const settingsPanel = document.getElementById('settingsPanel');
+    document.getElementById('toggleSettingsBtn').addEventListener('click', () => {
+      settingsPanel.classList.toggle('open');
+      draw();
+    });
+
+    const dragInvertBtn = document.getElementById('dragInvertBtn');
+    dragInvertBtn.addEventListener('click', () => {
+      invertDrag = !invertDrag;
+      dragInvertBtn.textContent = invertDrag ? '引っ張り式（逆方向に発射）' : '直接指定（ドラッグ方向に発射）';
+    });
+
+    function updateAngle(newDeg) {
+      angleDeg = ((newDeg + 180) % 360 + 360) % 360 - 180;
+      document.getElementById('angleText').textContent = angleDeg.toFixed(1) + '°';
+      draw();
+    }
+    document.getElementById('angleMinusLarge').addEventListener('click', () => updateAngle(angleDeg - 2.0));
+    document.getElementById('angleMinus').addEventListener('click', () => updateAngle(angleDeg - 0.5));
+    document.getElementById('anglePlus').addEventListener('click', () => updateAngle(angleDeg + 0.5));
+    document.getElementById('anglePlusLarge').addEventListener('click', () => updateAngle(angleDeg + 2.0));
+
+    const bounceBtn = document.getElementById('bounceBtn');
+    const bounceOptions = [3, 6, 10, 15];
+    bounceBtn.addEventListener('click', () => {
+      const nextIdx = (bounceOptions.indexOf(maxBounces) + 1) % bounceOptions.length;
+      maxBounces = bounceOptions[nextIdx];
+      bounceBtn.textContent = `反射: ${maxBounces}回`;
+      draw();
+    });
+
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    function getBallRadiusPx() {
+      const playWidth = ((config.wallRight - config.wallLeft) / 100) * canvas.width;
+      return (config.ballRadius / 100) * playWidth;
+    }
+
+    function clampBallPosition() {
+      const r = getBallRadiusPx();
+      const minX = (config.wallLeft / 100) * canvas.width + r;
+      const maxX = (config.wallRight / 100) * canvas.width - r;
+      const minY = (config.wallTop / 100) * canvas.height + r;
+      const maxY = (config.wallBottom / 100) * canvas.height - r;
+
+      let px = ballPos.x * canvas.width;
+      let py = ballPos.y * canvas.height;
+      px = Math.max(minX, Math.min(maxX, px));
+      py = Math.max(minY, Math.min(maxY, py));
+
+      ballPos.x = px / canvas.width;
+      ballPos.y = py / canvas.height;
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      const pt = getCanvasCoords(e);
+      isDragging = true;
+
+      if (mode === 'place') {
+        ballPos.x = pt.x / canvas.width;
+        ballPos.y = pt.y / canvas.height;
+        clampBallPosition();
+        draw();
+      } else if (mode === 'aim') {
+        dragStart = pt;
+        dragCurrent = pt;
+        draw();
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const pt = getCanvasCoords(e);
+
+      if (mode === 'place') {
+        ballPos.x = pt.x / canvas.width;
+        ballPos.y = pt.y / canvas.height;
+        clampBallPosition();
+        draw();
+      } else if (mode === 'aim') {
+        dragCurrent = pt;
+        const dx = invertDrag ? (dragStart.x - dragCurrent.x) : (dragCurrent.x - dragStart.x);
+        const dy = invertDrag ? (dragStart.y - dragCurrent.y) : (dragCurrent.y - dragStart.y);
+        if (Math.hypot(dx, dy) > 5) {
+          const rad = Math.atan2(dy, dx);
+          updateAngle(rad * 180 / Math.PI);
+        }
+      }
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      canvas.releasePointerCapture(e.pointerId);
+
+      if (mode === 'place') {
+        setMode('aim');
+      }
+      dragStart = null;
+      dragCurrent = null;
+      draw();
+    });
+
+    function calculateTrajectory() {
+      const r = getBallRadiusPx();
+      const minX = (config.wallLeft / 100) * canvas.width + r;
+      const maxX = (config.wallRight / 100) * canvas.width - r;
+      const minY = (config.wallTop / 100) * canvas.height + r;
+      const maxY = (config.wallBottom / 100) * canvas.height - r;
+
+      let x = ballPos.x * canvas.width;
+      let y = ballPos.y * canvas.height;
+
+      const rad = angleDeg * Math.PI / 180;
+      let dx = Math.cos(rad);
+      let dy = Math.sin(rad);
+
+      const points = [{ x, y }];
+
+      for (let i = 0; i < maxBounces; i++) {
+        let tx = Infinity;
+        if (dx > 1e-9) tx = (maxX - x) / dx;
+        else if (dx < -1e-9) tx = (minX - x) / dx;
+
+        let ty = Infinity;
+        if (dy > 1e-9) ty = (maxY - y) / dy;
+        else if (dy < -1e-9) ty = (minY - y) / dy;
+
+        if (tx < ty) {
+          x += dx * tx;
+          y += dy * tx;
+          dx = -dx;
+        } else {
+          x += dx * ty;
+          y += dy * ty;
+          dy = -dy;
+        }
+        points.push({ x, y });
+      }
+      return points;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (bgImage) {
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#1c1c1e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      const wLeft = (config.wallLeft / 100) * canvas.width;
+      const wRight = (config.wallRight / 100) * canvas.width;
+      const wTop = (config.wallTop / 100) * canvas.height;
+      const wBottom = (config.wallBottom / 100) * canvas.height;
+      const r = getBallRadiusPx();
+
+      const isSettingsOpen = settingsPanel.classList.contains('open');
+      if (isSettingsOpen) {
+        // 赤線：壁そのものの境界
+        ctx.strokeStyle = 'rgba(255, 69, 58, 0.9)';
+        ctx.lineWidth = Math.max(2.5, canvas.width * 0.0035);
+        ctx.strokeRect(wLeft, wTop, wRight - wLeft, wBottom - wTop);
+
+        // 緑点線：実際にボールの中心（白丸）が折り返す有効境界線
+        ctx.save();
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = 'rgba(50, 215, 75, 0.95)';
+        ctx.lineWidth = Math.max(2, canvas.width * 0.003);
+        ctx.strokeRect(wLeft + r, wTop + r, (wRight - r) - (wLeft + r), (wBottom - r) - (wTop + r));
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = Math.max(1.5, canvas.width * 0.002);
+        ctx.strokeRect(wLeft, wTop, wRight - wLeft, wBottom - wTop);
+      }
+
+      const points = calculateTrajectory();
+      const lineWidth = Math.max(2.5, (wRight - wLeft) * 0.006);
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const alpha = Math.max(0.25, 1 - i * 0.08);
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.strokeStyle = i === 0 ? `rgba(255, 214, 10, ${alpha})` : `rgba(0, 229, 255, ${alpha})`;
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        if (i > 0) {
+          ctx.beginPath();
+          ctx.arc(p1.x, p1.y, lineWidth * 1.1, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.fill();
+        }
+      }
+
+      if (points.length >= 2) {
+        const last = points[points.length - 1];
+        const prev = points[points.length - 2];
+        const endAngle = Math.atan2(last.y - prev.y, last.x - prev.x);
+        const arrowLen = lineWidth * 3.5;
+
+        ctx.beginPath();
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(last.x - arrowLen * Math.cos(endAngle - Math.PI / 6), last.y - arrowLen * Math.sin(endAngle - Math.PI / 6));
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(last.x - arrowLen * Math.cos(endAngle + Math.PI / 6), last.y - arrowLen * Math.sin(endAngle + Math.PI / 6));
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.8)';
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+      }
+
+      const bx = ballPos.x * canvas.width;
+      const by = ballPos.y * canvas.height;
+      const drawR = Math.max(6, r);
+
+      ctx.beginPath();
+      ctx.arc(bx, by, drawR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 159, 10, 0.35)';
+      ctx.fill();
+      ctx.strokeStyle = '#ff9f0a';
+      ctx.lineWidth = Math.max(2, lineWidth * 0.7);
+      ctx.stroke();
+
+      const crossSize = drawR * 0.45;
+      ctx.beginPath();
+      ctx.moveTo(bx - crossSize, by);
+      ctx.lineTo(bx + crossSize, by);
+      ctx.moveTo(bx, by - crossSize);
+      ctx.lineTo(bx, by + crossSize);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = Math.max(1.5, lineWidth * 0.4);
+      ctx.stroke();
+
+      if (isDragging && mode === 'aim' && dragStart && dragCurrent) {
+        ctx.beginPath();
+        ctx.moveTo(dragStart.x, dragStart.y);
+        ctx.lineTo(dragCurrent.x, dragCurrent.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.setLineDash([8, 8]);
+        ctx.lineWidth = Math.max(2, lineWidth * 0.5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    draw();
+  </script>
+</body>
+</html>
