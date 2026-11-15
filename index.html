@@ -60,6 +60,10 @@
       padding: 3px 8px;
       font-size: 12px;
     }
+    .btn.compact {
+      padding: 6px 7px;
+      font-size: 12px;
+    }
     input[type="file"] {
       display: none;
     }
@@ -131,24 +135,32 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
-      padding: 6px 10px;
+      gap: 4px;
+      padding: 6px 8px;
       background-color: #1e1e1e;
       border-top: 1px solid #333;
       flex-shrink: 0;
     }
     .angle-display {
-      font-size: 13px;
+      font-size: 12px;
       font-variant-numeric: tabular-nums;
-      min-width: 68px;
+      min-width: 52px;
       text-align: center;
       color: #ffd60a;
       font-weight: bold;
     }
-    .fine-controls {
+    .bounce-display {
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      min-width: 54px;
+      text-align: center;
+      color: #fff;
+      font-weight: 600;
+    }
+    .fine-controls, .bounce-controls {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
   </style>
 </head>
@@ -224,13 +236,17 @@
   <!-- 下部微調整バー -->
   <div class="bottom-bar">
     <div class="fine-controls">
-      <button id="angleMinusLarge" class="btn">-2°</button>
-      <button id="angleMinus" class="btn">-0.5°</button>
+      <button id="angleMinusLarge" class="btn compact">-2°</button>
+      <button id="angleMinus" class="btn compact">-0.5°</button>
       <div id="angleText" class="angle-display">-90.0°</div>
-      <button id="anglePlus" class="btn">+0.5°</button>
-      <button id="anglePlusLarge" class="btn">+2°</button>
+      <button id="anglePlus" class="btn compact">+0.5°</button>
+      <button id="anglePlusLarge" class="btn compact">+2°</button>
     </div>
-    <button id="bounceBtn" class="btn">反射: 6回</button>
+    <div class="bounce-controls">
+      <button id="bounceMinus" class="btn compact">-</button>
+      <div id="bounceText" class="bounce-display">反射:6回</div>
+      <button id="bouncePlus" class="btn compact">+</button>
+    </div>
   </div>
 
   <script>
@@ -250,7 +266,6 @@
     let dragStart = null;
     let dragCurrent = null;
 
-    // モンストの壁判定に近づけた初期値
     const defaultConfig = {
       wallTop: 14.5,
       wallBottom: 79.5,
@@ -261,7 +276,6 @@
 
     const config = { ...defaultConfig };
 
-    // 新しい保存キーを使用して古い設定の上書きを防ぐ
     const STORAGE_KEY = 'sim_wall_config_v2';
     const savedConfig = localStorage.getItem(STORAGE_KEY);
     if (savedConfig) {
@@ -366,14 +380,15 @@
     document.getElementById('anglePlus').addEventListener('click', () => updateAngle(angleDeg + 0.5));
     document.getElementById('anglePlusLarge').addEventListener('click', () => updateAngle(angleDeg + 2.0));
 
-    const bounceBtn = document.getElementById('bounceBtn');
-    const bounceOptions = [3, 6, 10, 15];
-    bounceBtn.addEventListener('click', () => {
-      const nextIdx = (bounceOptions.indexOf(maxBounces) + 1) % bounceOptions.length;
-      maxBounces = bounceOptions[nextIdx];
-      bounceBtn.textContent = `反射: ${maxBounces}回`;
+    // 反射回数の自由調整（3〜15回）
+    const bounceText = document.getElementById('bounceText');
+    function updateBounces(newCount) {
+      maxBounces = Math.max(3, Math.min(15, newCount));
+      bounceText.textContent = `反射:${maxBounces}回`;
       draw();
-    });
+    }
+    document.getElementById('bounceMinus').addEventListener('click', () => updateBounces(maxBounces - 1));
+    document.getElementById('bouncePlus').addEventListener('click', () => updateBounces(maxBounces + 1));
 
     function getCanvasCoords(e) {
       const rect = canvas.getBoundingClientRect();
@@ -446,9 +461,7 @@
       isDragging = false;
       canvas.releasePointerCapture(e.pointerId);
 
-      if (mode === 'place') {
-        setMode('aim');
-      }
+      // 手番配置後もモードは自動切り替えしない
       dragStart = null;
       dragCurrent = null;
       draw();
@@ -511,12 +524,10 @@
 
       const isSettingsOpen = settingsPanel.classList.contains('open');
       if (isSettingsOpen) {
-        // 赤線：壁そのものの境界
         ctx.strokeStyle = 'rgba(255, 69, 58, 0.9)';
         ctx.lineWidth = Math.max(2.5, canvas.width * 0.0035);
         ctx.strokeRect(wLeft, wTop, wRight - wLeft, wBottom - wTop);
 
-        // 緑点線：実際にボールの中心（白丸）が折り返す有効境界線
         ctx.save();
         ctx.setLineDash([6, 6]);
         ctx.strokeStyle = 'rgba(50, 215, 75, 0.95)';
@@ -535,7 +546,7 @@
       for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i];
         const p2 = points[i + 1];
-        const alpha = Math.max(0.25, 1 - i * 0.08);
+        const alpha = Math.max(0.25, 1 - i * 0.055);
 
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
@@ -607,3 +618,7 @@
   </script>
 </body>
 </html>
+     
+     
+
+    
